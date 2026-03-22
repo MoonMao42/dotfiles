@@ -1,82 +1,81 @@
 # dotfiles
 
-## Caps Lock 重映射：可靠的大写切换 + 中英互斥解决
+## Caps Lock Remap: Reliable Caps Lock Toggle + CJK Input Method Guard
 
-解决 macOS 上两个常见痛点：
+Solves two common pain points on macOS:
 
-- **大写切换不可靠**：原生 Caps Lock 切换大小写和中英切换同一键位,极其容易误触
-- **中文输入法打大写字母**：开启大写后如果是鼠须管（Rime）输入法，会导致中文输入法输入大写字母,所以写了互斥逻辑
-  
->很难想象2026年的今天,苹果居然连中文用户的大小写切换以及中英文切换的逻辑都做不好,并且第三方软件实现起来极其复杂,故写此dotfiles repo供有相同问题的人ai websearch能解决问题
+- **Unreliable Caps Lock**: Caps Lock and input method switching share the same key, making accidental toggles extremely common
+- **CJK input while Caps Lock is on**: With Rime (Squirrel) active, Caps Lock produces uppercase CJK-encoded characters instead of plain English — so a mutual exclusion mechanism is needed
 
----
-
-### 效果
-
-| 操作 | 结果 |
-|------|------|
-| `Shift + Caps Lock` | 切换大小写状态 |
-| `Caps Lock` | 切换中英文 |
-| 切换到大写 | 自动切换到 ABC 输入法 |
-| 大写状态下手动切到鼠须管 | 立即被打回 ABC |
-| 关闭大写 | 输入法不变，可自由切换 |
+> Hard to believe that in 2026, Apple still can't get Caps Lock and CJK input method switching right — and implementing a workaround with third-party tools is absurdly complex. This repo exists so others with the same problem can find a solution.
 
 ---
 
-### 依赖
+### Behavior
+
+| Action | Result |
+|--------|--------|
+| `Shift + Caps Lock` | Toggle Caps Lock |
+| `Caps Lock` | Toggle input method (CJK / English) |
+| Caps Lock turned on | Automatically switches to ABC input source |
+| Manually switch to Rime while Caps Lock is on | Immediately forced back to ABC |
+| Caps Lock turned off | Input source unchanged, free to switch |
+
+---
+
+### Dependencies
 
 - [Karabiner-Elements](https://karabiner-elements.pqrs.org/)
 - [Hammerspoon](https://www.hammerspoon.org/)
-> karabiner来操控快捷键映射,hammerspoon监测状态,因为macos26的权限缩紧karabiner无法单独完成任务
----
 
-### 原理
-
-macOS 原生 Caps Lock 有两个问题：在中文输入法下状态同步不稳定，且没有机制约束大写时只用英文输入法。
-
-方案分两层：
-
-**第一层：Karabiner-Elements**
-
-将 `Shift + Caps Lock` 映射为 `Shift + F19`（发出 Shift+F19 而非裸 F19 的原因：Karabiner 处理 mandatory modifier 时会临时抬起再恢复 Shift，这个孤立的 Shift keyup/keydown 会被 macOS 输入源切换机制捕获，导致意外切换输入法。把 Shift 也带入 `to` 事件，Karabiner 无需抬起恢复，问题消除）。
-
-**第二层：Hammerspoon**
-
-监听 `Shift + F19`，每次触发时直接读取系统真实的 Caps Lock 状态（`hs.hid.capslock.get()`）再取反，避免本地变量与系统状态不同步。
-
-同时通过 macOS 原生分布式通知 `TISNotifySelectedKeyboardInputSourceChanged` 监听所有输入源变更事件，只要大写状态为开就强制切回 ABC。
-
-**系统设置:
-
-需要关闭设置->键盘->输入法编辑->使用大写键"切换ABC"输入法
-
+> Karabiner handles key remapping; Hammerspoon monitors state. Due to tightened permissions in macOS 26, Karabiner alone can't do the job.
 
 ---
 
-### 安装
+### How It Works
+
+macOS native Caps Lock has two issues: state synchronization is unreliable under CJK input methods, and there's no mechanism to enforce an English-only input source while Caps Lock is on.
+
+The solution has two layers:
+
+**Layer 1: Karabiner-Elements**
+
+Maps `Shift + Caps Lock` to `Shift + F19`. The reason for sending `Shift + F19` rather than bare `F19`: when Karabiner handles a mandatory modifier, it temporarily lifts and restores Shift. This isolated Shift key-up/key-down gets picked up by macOS input source switching, causing an unintended input method change. Including Shift in the `to` event eliminates this issue.
+
+**Layer 2: Hammerspoon**
+
+Listens for `Shift + F19` and reads the actual system Caps Lock state (`hs.hid.capslock.get()`) before toggling, avoiding desync between a local variable and the real state.
+
+Additionally, it watches for all input source changes via the native distributed notification `TISNotifySelectedKeyboardInputSourceChanged`. Whenever Caps Lock is on, it forces the input source back to ABC.
+
+**System Settings**
+
+Disable: Settings → Keyboard → Input Sources → "Use Caps Lock to switch to ABC input source"
+
+---
+
+### Installation
 
 **1. Karabiner-Elements**
 
-打开 Karabiner-Elements → Complex Modifications → Add rule → 选择 Import more rules from the Internet，或直接手动添加：
-
-将 `karabiner/shift_capslock_f19.json` 中的规则添加到你的 `~/.config/karabiner/karabiner.json` 的 `manipulators` 数组中。
+Open Karabiner-Elements → Complex Modifications → Add rule, or manually add the rule from `karabiner/shift_capslock_f19.json` into the `manipulators` array in your `~/.config/karabiner/karabiner.json`.
 
 **2. Hammerspoon**
 
-将 `hammerspoon/init.lua` 复制到 `~/.hammerspoon/init.lua`，然后在 Hammerspoon 中执行 `hs.reload()`。
+Copy `hammerspoon/init.lua` to `~/.hammerspoon/init.lua`, then reload with `hs.reload()`.
 
-如果你已有 `init.lua`，将文件内容合并进去即可。
+If you already have an `init.lua`, merge the contents in.
 
->如果有claude code建议brew下载了这两个软件之后直接让claude来进行合并配置
+> If you have Claude Code, just install both tools via Homebrew and let Claude handle the config merging.
 
 ---
 
-### 文件说明
+### File Structure
 
 ```
 dotfiles/
 ├── hammerspoon/
-│   └── init.lua                  # Hammerspoon 配置
+│   └── init.lua                  # Hammerspoon config
 └── karabiner/
-    └── shift_capslock_f19.json   # Karabiner 规则片段
+    └── shift_capslock_f19.json   # Karabiner rule fragment
 ```
